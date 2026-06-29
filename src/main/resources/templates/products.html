@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Redis 캐시 데모</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; color: #333; }
+
+        header {
+            background: #1e293b;
+            color: white;
+            padding: 20px 40px;
+        }
+        header h1 { font-size: 22px; font-weight: 700; }
+        header p  { font-size: 13px; opacity: 0.7; margin-top: 4px; }
+
+        .container { max-width: 980px; margin: 28px auto; padding: 0 20px; }
+
+        /* 모드 탭 */
+        .tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+        }
+        .tab {
+            flex: 1;
+            padding: 16px;
+            text-align: center;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        .tab.lettuce        { background: #e0e7ff; color: #3730a3; }
+        .tab.lettuce.active { background: #4f46e5; color: white; }
+        .tab.redisson        { background: #fce7f3; color: #9d174d; }
+        .tab.redisson.active { background: #db2777; color: white; }
+
+        .tab-desc {
+            font-size: 12px;
+            font-weight: 400;
+            opacity: 0.85;
+            margin-top: 3px;
+        }
+
+        /* 패널 */
+        .panel {
+            background: white;
+            border-radius: 10px;
+            padding: 20px 24px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+        }
+        .panel h2 { font-size: 13px; color: #888; margin-bottom: 14px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+        .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+
+        .btn {
+            padding: 9px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-indigo  { background: #4f46e5; color: white; }
+        .btn-pink    { background: #db2777; color: white; }
+        .btn-gray    { background: #e5e7eb; color: #374151; }
+        .btn-red     { background: #dc2626; color: white; }
+        .btn:hover   { opacity: 0.85; }
+
+        /* 결과 배너 */
+        .result-banner {
+            background: white;
+            border-radius: 10px;
+            padding: 16px 24px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .result-banner .label { font-size: 12px; color: #999; margin-bottom: 4px; }
+        .result-banner .value { font-size: 20px; font-weight: 700; }
+        .value.indigo { color: #4f46e5; }
+        .value.pink   { color: #db2777; }
+
+        .elapsed-badge {
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 700;
+        }
+        .elapsed-badge.indigo { background: #eef2ff; color: #4f46e5; }
+        .elapsed-badge.pink   { background: #fdf2f8; color: #db2777; }
+
+        /* 설명 박스 */
+        .info-box {
+            border-radius: 8px;
+            padding: 14px 18px;
+            margin-bottom: 16px;
+            font-size: 13px;
+            line-height: 1.8;
+        }
+        .info-box.indigo { background: #eef2ff; border-left: 4px solid #4f46e5; color: #312e81; }
+        .info-box.pink   { background: #fdf2f8; border-left: 4px solid #db2777; color: #831843; }
+        .info-box strong { font-weight: 700; }
+
+        /* 테이블 */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+            margin-bottom: 16px;
+        }
+        thead { background: #1e293b; color: white; }
+        thead th { padding: 13px 18px; text-align: left; font-size: 13px; }
+        tbody tr:nth-child(even) { background: #f8fafc; }
+        tbody tr:hover { background: #f1f5f9; }
+        tbody td { padding: 12px 18px; font-size: 14px; border-bottom: 1px solid #f1f5f9; }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .badge-blue   { background: #dbeafe; color: #1d4ed8; }
+        .badge-green  { background: #dcfce7; color: #15803d; }
+        .badge-purple { background: #f3e8ff; color: #7e22ce; }
+        .price { font-weight: 700; }
+
+        .hint {
+            background: #fffbeb;
+            border: 1px solid #fcd34d;
+            border-radius: 8px;
+            padding: 14px 18px;
+            font-size: 13px;
+            color: #92400e;
+            line-height: 1.8;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Redis 캐시 데모</h1>
+    <p>Lettuce(기본) vs Redisson(고트래픽) 비교</p>
+</header>
+
+<div class="container">
+
+    <!-- 모드 탭 -->
+    <div class="tabs">
+        <a th:href="@{/products(mode='lettuce')}"
+           th:classappend="${mode == 'lettuce'} ? 'active'"
+           class="tab lettuce">
+            Lettuce (기본)
+            <div class="tab-desc">ReactiveRedisTemplate · 단순 Cache-Aside</div>
+        </a>
+        <a th:href="@{/products(mode='redisson')}"
+           th:classappend="${mode == 'redisson'} ? 'active'"
+           class="tab redisson">
+            Redisson (고트래픽)
+            <div class="tab-desc">RMapCache + RLock · Cache Stampede 방지</div>
+        </a>
+    </div>
+
+    <!-- 모드별 설명 -->
+    <div th:if="${mode == 'lettuce'}" class="info-box indigo">
+        <strong>Lettuce / ReactiveRedisTemplate</strong><br>
+        캐시 MISS 시 락 없이 바로 DB 조회. 동시에 N개 요청이 MISS를 만나면 N번 DB 쿼리가 발생합니다.
+        <strong>(Cache Stampede 취약)</strong>
+    </div>
+    <div th:if="${mode == 'redisson'}" class="info-box pink">
+        <strong>Redisson / RMapCache + RLock (Double-Check Locking)</strong><br>
+        MISS 시 분산 락 획득 → 락 대기 스레드는 2차 캐시 재조회 → DB는 오직 1번만 조회.
+        <strong>동시 요청 100개가 와도 DB 쿼리는 1회</strong>
+    </div>
+
+    <!-- 조회 버튼 -->
+    <div class="panel">
+        <h2>조회</h2>
+        <div class="btn-group">
+            <a th:classappend="${mode == 'redisson'} ? 'btn-pink' : 'btn-indigo'"
+               th:href="@{/products(mode=${mode})}"
+               class="btn">전체 조회</a>
+            <a th:classappend="${mode == 'redisson'} ? 'btn-pink' : 'btn-indigo'"
+               th:href="@{/products(mode=${mode}, category='전자제품')}"
+               class="btn">전자제품</a>
+            <a class="btn btn-gray"
+               th:href="@{/products(mode=${mode}, category='주변기기')}">주변기기</a>
+            <a class="btn btn-gray"
+               th:href="@{/products(mode=${mode}, category='가구')}">가구</a>
+            <a class="btn btn-gray"
+               th:href="@{/products(mode=${mode}, id=1)}">ID=1 단건</a>
+        </div>
+    </div>
+
+    <!-- 결과 배너 -->
+    <div class="result-banner">
+        <div>
+            <div class="label">조회 유형</div>
+            <div th:classappend="${mode == 'redisson'} ? 'pink' : 'indigo'"
+                 class="value"
+                 th:text="${queryInfo}">-</div>
+        </div>
+        <div>
+            <div class="label" style="text-align:right; margin-bottom:6px;">응답 시간</div>
+            <span th:classappend="${mode == 'redisson'} ? 'pink' : 'indigo'"
+                  class="elapsed-badge"
+                  th:text="${elapsed} + ' ms'">- ms</span>
+        </div>
+    </div>
+
+    <!-- 상품 테이블 -->
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>상품명</th>
+                <th>카테고리</th>
+                <th>가격</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr th:each="p : ${products}">
+                <td th:text="${p.id}"></td>
+                <td th:text="${p.name}"></td>
+                <td>
+                    <span th:classappend="${p.category == '전자제품'} ? 'badge-blue' : (${p.category == '주변기기'} ? 'badge-green' : 'badge-purple')"
+                          class="badge" th:text="${p.category}"></span>
+                </td>
+                <td class="price" th:text="${#numbers.formatInteger(p.price, 1, 'COMMA')} + ' 원'"></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <!-- 캐시 관리 -->
+    <div class="panel">
+        <h2>캐시 관리</h2>
+        <form method="post" action="/products/cache/evict">
+            <input type="hidden" name="mode" th:value="${mode}">
+            <button th:classappend="${mode == 'redisson'} ? 'btn-red' : 'btn-red'"
+                    class="btn btn-red" type="submit">
+                현재 모드 캐시 전체 삭제
+            </button>
+        </form>
+    </div>
+
+    <!-- 힌트 -->
+    <div class="hint">
+        <strong>테스트 방법</strong><br>
+        1. <strong>Lettuce 탭</strong>에서 조회 → 로그 <code>[CACHE MISS]</code> 확인 → 재조회 → <code>[CACHE HIT]</code><br>
+        2. <strong>Redisson 탭</strong>으로 전환 → 동일하게 조회 → 로그 <code>[REDISSON MISS / HIT]</code> 확인<br>
+        3. 고트래픽 시뮬레이션: 캐시 삭제 후 브라우저 탭 여러 개에서 동시 요청
+           → Lettuce는 <code>MISS</code> 여러 번, Redisson은 <code>MISS 1번 + HIT after lock</code>
+    </div>
+
+</div>
+</body>
+</html>
