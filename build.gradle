@@ -22,6 +22,10 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-session-data-redis'
 	implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.redisson:redisson:3.35.0'
+	runtimeOnly 'com.mysql:mysql-connector-j'
+	testRuntimeOnly 'com.h2database:h2'
 	compileOnly 'org.projectlombok:lombok'
 	annotationProcessor 'org.projectlombok:lombok'
 	testImplementation 'org.springframework.boot:spring-boot-starter-data-redis-reactive-test'
@@ -35,4 +39,21 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+	filter {
+		excludeTestsMatching 'demo_cache.redis.CacheStampedeLoadTest'
+	}
+}
+
+tasks.register('loadTest', Test) {
+	dependsOn testClasses
+	testClassesDirs = sourceSets.test.output.classesDirs
+	classpath        = sourceSets.test.runtimeClasspath
+	useJUnitPlatform()
+	filter {
+		includeTestsMatching 'demo_cache.redis.CacheStampedeLoadTest'
+	}
+	testLogging {
+		events 'passed', 'failed', 'skipped'
+		showStandardStreams = true
+	}
 }
